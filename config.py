@@ -4,6 +4,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parses common boolean env values like true/false, 1/0, yes/no."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
 @dataclass
 class Config:
     BRAND_NAME: str              = os.getenv("BRAND_NAME", "Mujarbat")
@@ -37,6 +45,46 @@ class Config:
     VIDEO_HEIGHT: int            = 1920
     VIDEO_FPS: int               = 30
     MAX_DURATION_SEC: int        = 60
+
+    def is_tiktok_enabled(self) -> bool:
+        auto = bool(self.TIKTOK_ACCESS_TOKEN)
+        return _env_bool("TIKTOK_ENABLED", auto)
+
+    def is_instagram_enabled(self) -> bool:
+        auto = bool(self.INSTAGRAM_ACCESS_TOKEN and self.INSTAGRAM_ACCOUNT_ID)
+        return _env_bool("INSTAGRAM_ENABLED", auto)
+
+    def is_youtube_enabled(self) -> bool:
+        # Keep parsing minimal here to avoid startup failure on malformed JSON.
+        secret = (self.YOUTUBE_CLIENT_SECRET or "").strip()
+        auto = secret not in {"", "{}"}
+        return _env_bool("YOUTUBE_ENABLED", auto)
+
+    def is_pinterest_enabled(self) -> bool:
+        auto = bool(self.PINTEREST_ACCESS_TOKEN and self.PINTEREST_BOARD_ID)
+        return _env_bool("PINTEREST_ENABLED", auto)
+
+    def is_snapchat_enabled(self) -> bool:
+        auto = bool(self.SNAPCHAT_ACCESS_TOKEN)
+        return _env_bool("SNAPCHAT_ENABLED", auto)
+
+    def enabled_social_platforms(self) -> list[str]:
+        enabled = []
+        if self.is_tiktok_enabled():
+            enabled.append("tiktok")
+        if self.is_instagram_enabled():
+            enabled.append("instagram")
+        if self.is_youtube_enabled():
+            enabled.append("youtube")
+        if self.is_pinterest_enabled():
+            enabled.append("pinterest")
+        if self.is_snapchat_enabled():
+            enabled.append("snapchat")
+        return enabled
+
+    def requires_public_video_url(self) -> bool:
+        # Instagram and Pinterest publish endpoints consume a public URL.
+        return self.is_instagram_enabled() or self.is_pinterest_enabled()
 
     def validate(self):
         required = {

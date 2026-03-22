@@ -59,21 +59,31 @@ def run_single_video() -> bool:
         if not qc["valid"]: raise RuntimeError(f"QC فشل: {', '.join(qc['issues'])}")
         log_pipeline(video_id, "qc", f"✅ {qc['duration']:.1f}s | {qc['size_mb']}MB")
 
-        public_url = upload_to_r2(final_path)
-        log_pipeline(video_id, "cdn", f"✅ {public_url}")
+        public_url = ""
+        if config.requires_public_video_url():
+            public_url = upload_to_r2(final_path)
+            log_pipeline(video_id, "cdn", f"✅ {public_url}")
+        else:
+            log_pipeline(video_id, "cdn", "ℹ️ تم تخطي الرفع: لا منصة مفعلة تحتاج رابط عام")
 
         update_video(video_id, status="publishing")
         short_title = script.get("hook", topic["topic_ar"])[:100]
         results = {}
 
+        enabled_platforms = set(config.enabled_social_platforms())
+        log_pipeline(video_id, "publish", f"📌 المنصات المفعلة: {', '.join(sorted(enabled_platforms)) or 'لا يوجد'}")
+
         platforms = [
-            ("tiktok",    lambda: publish_tiktok(final_path, caption)),
+            ("tiktok", lambda: publish_tiktok(final_path, caption)),
             ("instagram", lambda: publish_instagram(final_path, caption, public_url)),
-            ("youtube",   lambda: publish_youtube(final_path, short_title, caption)),
+            ("youtube", lambda: publish_youtube(final_path, short_title, caption)),
             ("pinterest", lambda: publish_pinterest(public_url, short_title, caption[:500])),
-            ("snapchat",  lambda: publish_snapchat(final_path, caption[:250])),
+            ("snapchat", lambda: publish_snapchat(final_path, caption[:250])),
         ]
         for name, fn in platforms:
+            if name not in enabled_platforms:
+                log_pipeline(video_id, "publish", f"⏭️ {name}: غير مفعل في .env")
+                continue
             try:
                 results[name] = fn()
                 log_pipeline(video_id, "publish", f"✅ {name}: {results[name]}")
@@ -91,7 +101,7 @@ def run_single_video() -> bool:
             try: os.remove(p)
             except: pass
 
-        print(f"\n✅ فيديو #{video_id} على {len(results)}/5 منصات")
+        print(f"\n✅ فيديو #{video_id} على {len(results)}/{len(enabled_platforms)} منصات مفعلة")
         return True
 
     except Exception as e:

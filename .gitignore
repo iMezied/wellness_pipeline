@@ -1,0 +1,44 @@
+# ---- Secrets & sensitive config ----
+.env
+.env.*
+!.env.example
+
+# Private keys, certificates, and keystores
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+
+# Common local credential/config files
+secrets.*
+credentials.*
+*.kdbx
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# ---- OS / Editor ----
+.DS_Store
+.vscode/
+.idea/
+
+# ---- Logs / temp ----
+*.log
+*.tmp

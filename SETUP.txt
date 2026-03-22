@@ -1,0 +1,126 @@
+# ============================================================
+# requirements.txt
+# ============================================================
+anthropic>=0.25.0
+requests>=2.31.0
+mysql-connector-python>=8.3.0
+schedule>=1.2.1
+assemblyai>=0.20.0
+boto3>=1.34.0
+google-api-python-client>=2.118.0
+google-auth-oauthlib>=1.2.0
+
+
+# ============================================================
+# .env.example — انسخ هذا الملف إلى .env وعبّئ القيم
+# ============================================================
+
+# AI APIs
+CLAUDE_API_KEY=sk-ant-...
+ELEVENLABS_API_KEY=...
+ELEVENLABS_VOICE_ID=...          # ID الصوت العربي المختار
+KLING_API_KEY=...
+ASSEMBLY_API_KEY=...
+
+# Publishing
+TIKTOK_ACCESS_TOKEN=...
+INSTAGRAM_ACCESS_TOKEN=...
+INSTAGRAM_ACCOUNT_ID=...
+YOUTUBE_CLIENT_SECRET={"token":"...","refresh_token":"...","client_id":"...","client_secret":"..."}
+PINTEREST_ACCESS_TOKEN=...
+PINTEREST_BOARD_ID=...
+SNAPCHAT_ACCESS_TOKEN=...
+
+# Database
+DB_HOST=127.0.0.1
+DB_NAME=wellness_pipeline
+DB_USER=wellness_user
+DB_PASS=your_secure_password
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# CDN (Cloudflare R2)
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY=...
+R2_SECRET_KEY=...
+R2_BUCKET=wellness-videos
+R2_PUBLIC_DOMAIN=videos.yourdomain.com
+
+
+# ============================================================
+# setup.sh — سكريبت الإعداد الأول على الـ VPS
+# ============================================================
+#!/bin/bash
+set -e
+
+echo "📦 تثبيت المتطلبات..."
+apt-get update -qq
+apt-get install -y ffmpeg python3-pip mysql-server redis-server
+
+echo "🐍 تثبيت Python packages..."
+pip3 install -r requirements.txt
+
+echo "📁 إنشاء المجلدات..."
+mkdir -p /var/wellness/output /var/wellness/tmp
+chown -R www-data:www-data /var/wellness
+
+echo "🗄️ إعداد قاعدة البيانات..."
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS wellness_pipeline CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -e "CREATE USER IF NOT EXISTS 'wellness_user'@'localhost' IDENTIFIED BY '${DB_PASS}';"
+mysql -u root -e "GRANT ALL ON wellness_pipeline.* TO 'wellness_user'@'localhost';"
+
+echo "🚀 تهيئة قاعدة البيانات..."
+python3 -c "from db import init_db; init_db()"
+
+echo "✅ الإعداد اكتمل!"
+echo ""
+echo "للاختبار:    python3 pipeline.py once"
+echo "للإنتاج:     python3 pipeline.py"
+
+
+# ============================================================
+# /etc/systemd/system/wellness-pipeline.service
+# ضع هذا الملف على الـ VPS لتشغيل تلقائي عند الإقلاع
+# ============================================================
+[Unit]
+Description=Wellness Content Pipeline
+After=network.target mysql.service redis.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/wellness/pipeline
+EnvironmentFile=/var/wellness/pipeline/.env
+ExecStart=/usr/bin/python3 pipeline.py
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+# تفعيل الخدمة:
+# systemctl daemon-reload
+# systemctl enable wellness-pipeline
+# systemctl start wellness-pipeline
+# journalctl -u wellness-pipeline -f  ← لمتابعة اللوق
+
+
+# ============================================================
+# COST BREAKDOWN (تكلفة كل فيديو)
+# ============================================================
+# Claude API (script ~500 tokens):      ~$0.003
+# ElevenLabs (~300 words):              ~$0.045
+# Kling AI (10s video):                 ~$0.10
+# AssemblyAI (45s audio):               ~$0.006
+# Cloudflare R2 storage:                ~$0.001
+# ─────────────────────────────────────────────
+# الإجمالي لكل فيديو:                  ~$0.155
+# الإجمالي يومياً (3 فيديوهات):        ~$0.47
+# الإجمالي شهرياً (90 فيديو):          ~$14
+# ─────────────────────────────────────────────
+# + اشتراكات ثابتة (Buffer, etc.):     ~$65/شهر
+# ─────────────────────────────────────────────
+# التكلفة الإجمالية الشهرية:           ~$79/شهر

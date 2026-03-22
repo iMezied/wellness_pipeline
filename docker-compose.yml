@@ -1,0 +1,89 @@
+services:
+
+  # ── MySQL ──────────────────────────────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: wellness_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MYSQL_DATABASE:      ${DB_NAME}
+      MYSQL_USER:          ${DB_USER}
+      MYSQL_PASSWORD:      ${DB_PASS}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "3307:3306"       # 3307 للخارج — 3306 داخل Docker فقط
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASS}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wellness_net
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: wellness_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 3
+    networks:
+      - wellness_net
+
+  # ── Pipeline Worker ────────────────────────────────────────────────────────
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wellness_pipeline
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db           # اسم الـ service — مش 127.0.0.1
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - output_data:/var/wellness/output
+      - tmp_data:/var/wellness/tmp
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - wellness_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ── Dashboard (Adminer — DB GUI) ───────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: wellness_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - wellness_net
+
+# ── Volumes ────────────────────────────────────────────────────────────────
+volumes:
+  db_data:
+  redis_data:
+  output_data:
+  tmp_data:
+
+# ── Network ────────────────────────────────────────────────────────────────
+networks:
+  wellness_net:
+    driver: bridge

@@ -1,0 +1,9 @@
+anthropic>=0.25.0
+requests>=2.31.0
+mysql-connector-python>=8.3.0
+schedule>=1.2.1
+assemblyai>=0.20.0
+boto3>=1.34.0
+google-api-python-client>=2.118.0
+google-auth-oauthlib>=1.2.0
+python-dotenv>=1.0.0
